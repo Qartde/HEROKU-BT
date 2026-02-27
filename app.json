@@ -1,6 +1,6 @@
 {
   "name":"HEROKU-BT",
-  "description":"Best whatsapp bot☀️ developed by Rahmany 🎯",
+  "description":"Best whatsapp bot developed by Rahmany 💚",
   "keywords":["bot","node","baileys","whatsapp"],
   "logo":"https://files.catbox.moe/zotx9t.jpg",
   "repository":"https://github.com/rahzyn/HEROKU-BT",
@@ -78,7 +78,7 @@
 	,
     "HEROKU_API_KEY": {
     "description": "insert your heroku api-key (this is optionnal)",
-     "value":"",
+     "value":"HRKU-6930f8d0-3dde-4024-8bc5-ea03012e0fc1",
      "required" :false
     },
   "HEROKU_APP_NAME": {
