@@ -53,6 +53,8 @@ const prefixe = conf.PREFIXE;
 const more = String.fromCharCode(8206)
 const readmore = more.repeat(4001)
 
+// Custom Baileys version URL
+const CUSTOM_BAILEYS_VERSION_URL = 'https://raw.githubusercontent.com/xhclintohn/Baileys/main/lib/Defaults/baileys-version.json';
 
 async function authentification() {
     try {
@@ -73,12 +75,33 @@ async function authentification() {
     }
 }
 authentification();
+
+// Function to fetch custom Baileys version
+async function getBaileysVersion() {
+    try {
+        console.log("🔄 Fetching custom Baileys version...");
+        const response = await axios.get(CUSTOM_BAILEYS_VERSION_URL);
+        console.log("✅ Custom Baileys version fetched successfully:", response.data.version);
+        return {
+            version: response.data.version,
+            isLatest: false
+        };
+    } catch (error) {
+        console.log("⚠️ Failed to fetch custom Baileys version:", error.message);
+        console.log("🔄 Falling back to latest Baileys version...");
+        return await (0, baileys_1.fetchLatestBaileysVersion)();
+    }
+}
+
 const store = (0, baileys_1.makeInMemoryStore)({
     logger: pino().child({ level: "silent", stream: "store" }),
 });
+
 setTimeout(() => {
     async function main() {
-        const { version, isLatest } = await (0, baileys_1.fetchLatestBaileysVersion)();
+        // Get Baileys version from custom URL or fallback to latest
+        const { version, isLatest } = await getBaileysVersion();
+        
         const { state, saveCreds } = await (0, baileys_1.useMultiFileAuthState)(__dirname + "/auth");
         const sockOptions = {
             version,
