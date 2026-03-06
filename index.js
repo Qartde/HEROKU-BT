@@ -324,72 +324,83 @@ function mybotpic() {
                                }
                             }
         
-            /** ****** gestion auto-status - COMPLETE VERSION WITH AUTO REACT */
+            /** ****** AUTO STATUS LIKE - FULL VERSION */
             
-            // Auto Read Status
-            if (ms.key && ms.key.remoteJid === "status@broadcast" && conf.AUTO_READ_STATUS === "yes") {
-                await zk.readMessages([ms.key]);
-            }
-            
-            // Auto React Status - IMPROVED VERSION
-            if (ms.key && ms.key.remoteJid === "status@broadcast" && conf.AUTO_REACT_STATUS === "yes") {
-                try {
-                    // Rich collection of emojis for status reactions
-                    const reactionEmojis = [
-                        "❤️", "🔥", "👍", "😂", "😮", "😢", "🤔", "👏", "🎉", "🤩",
-                        "💯", "✨", "⭐", "💪", "👑", "🥳", "💖", "✅", "🙏", "😍",
-                        "🥰", "😎", "🤗", "🫡", "👌", "🤝", "🎯", "⚡", "💫", "🌟",
-                        "💥", "🔥", "💋", "👀", "💚", "💙", "💜", "🖤", "🤍", "🤎"
-                    ];
-                    
-                    // Choose random emoji from the collection
-                    const randomEmoji = reactionEmojis[Math.floor(Math.random() * reactionEmojis.length)];
-                    
-                    // Small delay to ensure status is properly processed
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    // React to the status with the random emoji
-                    await zk.sendMessage(ms.key.remoteJid, {
-                        react: {
-                            text: randomEmoji,
-                            key: ms.key
+            // Auto Status Handler
+            if (ms.key && ms.key.remoteJid === "status@broadcast") {
+                
+                // 1. AUTO READ STATUS
+                if (conf.AUTO_READ_STATUS === "yes") {
+                    try {
+                        await zk.readMessages([ms.key]);
+                        console.log(`✅ Auto-read status from ${ms.key.participant?.split('@')[0] || 'unknown'}`);
+                    } catch (readError) {
+                        console.log("❌ Auto-read failed:", readError.message);
+                    }
+                }
+                
+                // 2. AUTO LIKE STATUS (HEART)
+                if (conf.AUTO_REACT_STATUS === "yes") {
+                    try {
+                        // Delay to ensure status is processed
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        
+                        // Send heart reaction (like)
+                        await zk.sendMessage(ms.key.remoteJid, {
+                            react: {
+                                text: "❤️",
+                                key: ms.key
+                            }
+                        });
+                        
+                        console.log(`✅ Liked status from ${ms.key.participant?.split('@')[0] || 'unknown'} with ❤️`);
+                        
+                        // Delay between reactions
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        
+                    } catch (reactError) {
+                        console.log("❌ Auto-like failed:", reactError.message);
+                    }
+                }
+                
+                // 3. AUTO DOWNLOAD STATUS (TO OWNER)
+                if (conf.AUTO_DOWNLOAD_STATUS === "yes") {
+                    try {
+                        // Get owner number
+                        const ownerNumber = conf.NUMERO_OWNER + "@s.whatsapp.net";
+                        const senderName = ms.key.participant?.split('@')[0] || 'unknown';
+                        
+                        if (ms.message.extendedTextMessage) {
+                            var stTxt = ms.message.extendedTextMessage.text;
+                            await zk.sendMessage(ownerNumber, { 
+                                text: `📱 *STATUS UPDATE*\nFrom: @${senderName}\n\n${stTxt}`,
+                                mentions: [ms.key.participant]
+                            });
                         }
-                    });
-                    
-                    console.log(`✅ Auto-reacted to status from ${ms.key.participant?.split('@')[0] || 'unknown'} with ${randomEmoji}`);
-                    
-                    // Delay between reactions to avoid rate limiting
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    
-                } catch (reactError) {
-                    console.log("❌ Auto-react failed:", reactError.message);
+                        else if (ms.message.imageMessage) {
+                            var stMsg = ms.message.imageMessage.caption || "";
+                            var stImg = await zk.downloadAndSaveMediaMessage(ms.message.imageMessage);
+                            await zk.sendMessage(ownerNumber, { 
+                                image: { url: stImg }, 
+                                caption: `📱 *STATUS UPDATE*\nFrom: @${senderName}\n\n${stMsg}`,
+                                mentions: [ms.key.participant]
+                            });
+                        }
+                        else if (ms.message.videoMessage) {
+                            var stMsg = ms.message.videoMessage.caption || "";
+                            var stVideo = await zk.downloadAndSaveMediaMessage(ms.message.videoMessage);
+                            await zk.sendMessage(ownerNumber, {
+                                video: { url: stVideo }, 
+                                caption: `📱 *STATUS UPDATE*\nFrom: @${senderName}\n\n${stMsg}`,
+                                mentions: [ms.key.participant]
+                            });
+                        }
+                    } catch (downloadError) {
+                        console.log("❌ Auto-download failed:", downloadError.message);
+                    }
                 }
             }
-            
-            // Auto Download Status
-            if (ms.key && ms.key.remoteJid === 'status@broadcast' && conf.AUTO_DOWNLOAD_STATUS === "yes") {
-                try {
-                    if (ms.message.extendedTextMessage) {
-                        var stTxt = ms.message.extendedTextMessage.text;
-                        await zk.sendMessage(idBot, { text: stTxt }, { quoted: ms });
-                    }
-                    else if (ms.message.imageMessage) {
-                        var stMsg = ms.message.imageMessage.caption;
-                        var stImg = await zk.downloadAndSaveMediaMessage(ms.message.imageMessage);
-                        await zk.sendMessage(idBot, { image: { url: stImg }, caption: stMsg }, { quoted: ms });
-                    }
-                    else if (ms.message.videoMessage) {
-                        var stMsg = ms.message.videoMessage.caption;
-                        var stVideo = await zk.downloadAndSaveMediaMessage(ms.message.videoMessage);
-                        await zk.sendMessage(idBot, {
-                            video: { url: stVideo }, caption: stMsg
-                        }, { quoted: ms });
-                    }
-                } catch (downloadError) {
-                    console.log("❌ Auto-download failed:", downloadError.message);
-                }
-            }
-            /** ******fin auto-status */
+            /** ****** FIN AUTO STATUS */
             
             if (!dev && origineMessage == "120363158701337904@g.us") {
                 return;
