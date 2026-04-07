@@ -3,7 +3,7 @@ const conf = require("../set");
 const fs = require("fs-extra");
 const path = require("path");
 const { downloadMediaMessage } = require("@whiskeysockets/baileys");
-
+ 
 zokou({
     nomCom: "vv",
     categorie: "General",
