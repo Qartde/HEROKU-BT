@@ -1329,7 +1329,7 @@ if (conf.AUTO_READ === 'yes') {
                     await zk.sendMessage(origineMessage, {
                         text: `🚫 *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} ametolewa kwa kutag group kwenye status!`,
                         mentions: [mentionAuteur]
-                    }, { quoted: ms });
+                    });
                     try { await zk.groupParticipantsUpdate(origineMessage, [mentionAuteur], "remove"); } catch (e) {
                         console.log("remove error antimention: " + e);
                     }
@@ -1342,7 +1342,7 @@ if (conf.AUTO_READ === 'yes') {
                         await zk.sendMessage(origineMessage, {
                             text: `⚠️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} ametolewa baada ya onyo ${maxWarns}!`,
                             mentions: [mentionAuteur]
-                        }, { quoted: ms });
+                        });
                         try { await zk.groupParticipantsUpdate(origineMessage, [mentionAuteur], "remove"); } catch (e) {
                             console.log("remove after warn error: " + e);
                         }
@@ -1351,7 +1351,7 @@ if (conf.AUTO_READ === 'yes') {
                         await zk.sendMessage(origineMessage, {
                             text: `⚠️ *ANTI-MENTION ONYO | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} kutag group kwenye status hairuhusiwi!\n\n⚠️ Onyo ${warnCount + 1}/${maxWarns}`,
                             mentions: [mentionAuteur]
-                        }, { quoted: ms });
+                        });
                     }
 
                 } else {
@@ -1359,7 +1359,7 @@ if (conf.AUTO_READ === 'yes') {
                     await zk.sendMessage(origineMessage, {
                         text: `🛡️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} kutag group kwenye status hairuhusiwi!`,
                         mentions: [mentionAuteur]
-                    }, { quoted: ms });
+                    });
                 }
             }
         }
