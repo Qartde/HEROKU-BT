@@ -1289,12 +1289,19 @@ if (conf.AUTO_READ === 'yes') {
         if (verifGroupe && isAntiMentionEnabled) {
             const mentions = ms.message?.extendedTextMessage?.contextInfo?.mentionedJid ||
                              ms.message?.imageMessage?.contextInfo?.mentionedJid ||
-                             ms.message?.videoMessage?.contextInfo?.mentionedJid || [];
+                             ms.message?.videoMessage?.contextInfo?.mentionedJid ||
+                             ms.message?.groupStatusMentionMessage?.message?.extendedTextMessage?.contextInfo?.mentionedJid ||
+                             ms.message?.groupStatusMentionMessage?.message?.imageMessage?.contextInfo?.mentionedJid ||
+                             ms.message?.groupStatusMentionMessage?.message?.videoMessage?.contextInfo?.mentionedJid || [];
+
+            // Catch "@ You mentioned this group" status mention notification
+            const isStatusMention = mtype === 'groupStatusMentionMessage' || 
+                                    !!ms.message?.groupStatusMentionMessage;
 
             const allText = texte || ms?.message?.extendedTextMessage?.text || "";
             const hasBroadTag = allText.includes('@everyone') || allText.includes('@here') || allText.includes('@all');
 
-            if ((mentions.length > 0 || hasBroadTag) && !superUser && !verifAdmin) {
+            if ((mentions.length > 0 || hasBroadTag || isStatusMention) && !superUser && !verifAdmin) {
                 const messageToDelete = {
                     remoteJid: origineMessage,
                     fromMe: false,
