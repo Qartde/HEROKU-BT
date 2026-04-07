@@ -41,6 +41,7 @@ const { Sticker, createSticker, StickerTypes } = require('wa-sticker-formatter')
 //import chalk from 'chalk'
 const { verifierEtatJid , recupererActionJid } = require("./bdd/antilien");
 const { atbverifierEtatJid , atbrecupererActionJid } = require("./bdd/antibot");
+const { amVerifierEtatJid, amRecupererActionJid } = require("./bdd/antimention");
 let evt = require(__dirname + "/framework/zokou");
 const {isUserBanned , addUserToBanList , removeUserFromBanList} = require("./bdd/banUser");
 const  {addGroupToBanList,isGroupBanned,removeGroupFromBanList} = require("./bdd/banGroup");
@@ -1280,6 +1281,68 @@ if (conf.AUTO_READ === 'yes') {
         console.log("antilink error: " + e);
     }
     // ============= END ANTI-LINK HANDLER =============
+
+    // ============= ANTI-MENTION HANDLER | by Rahmani Md 🤠 =============
+    try {
+        const isAntiMentionEnabled = await amVerifierEtatJid(origineMessage);
+
+        if (verifGroupe && isAntiMentionEnabled) {
+            const mentions = ms.message?.extendedTextMessage?.contextInfo?.mentionedJid ||
+                             ms.message?.imageMessage?.contextInfo?.mentionedJid ||
+                             ms.message?.videoMessage?.contextInfo?.mentionedJid || [];
+
+            const allText = texte || ms?.message?.extendedTextMessage?.text || "";
+            const hasBroadTag = allText.includes('@everyone') || allText.includes('@here') || allText.includes('@all');
+
+            if ((mentions.length > 0 || hasBroadTag) && !superUser && !verifAdmin) {
+                const messageToDelete = {
+                    remoteJid: origineMessage,
+                    fromMe: false,
+                    id: ms.key.id,
+                    participant: auteurMessage
+                };
+
+                try { await zk.sendMessage(origineMessage, { delete: messageToDelete }); } catch (e) {}
+
+                const action = await amRecupererActionJid(origineMessage);
+
+                if (action === 'remove') {
+                    await zk.sendMessage(origineMessage, {
+                        text: `🚫 *ANTI-MENTION | RAHMANI MD*\n@${auteurMessage.split('@')[0]} has been removed for mass tagging!`,
+                        mentions: [auteurMessage]
+                    }, { quoted: ms });
+                    try { await zk.groupParticipantsUpdate(origineMessage, [auteurMessage], "remove"); } catch (e) {}
+
+                } else if (action === 'warn') {
+                    const { getWarnCountByJID, ajouterUtilisateurAvecWarnCount } = require('./bdd/warn');
+                    let warnCount = await getWarnCountByJID(auteurMessage);
+                    let maxWarns = conf.WARN_COUNT || 3;
+                    if (warnCount >= maxWarns) {
+                        await zk.sendMessage(origineMessage, {
+                            text: `⚠️ *ANTI-MENTION | RAHMANI MD*\n@${auteurMessage.split('@')[0]} removed after ${maxWarns} warnings!`,
+                            mentions: [auteurMessage]
+                        }, { quoted: ms });
+                        try { await zk.groupParticipantsUpdate(origineMessage, [auteurMessage], "remove"); } catch (e) {}
+                    } else {
+                        await ajouterUtilisateurAvecWarnCount(auteurMessage);
+                        await zk.sendMessage(origineMessage, {
+                            text: `⚠️ *ANTI-MENTION WARNING | RAHMANI MD*\n@${auteurMessage.split('@')[0]} mass tagging is not allowed!\n\n⚠️ Warning ${warnCount + 1}/${maxWarns}`,
+                            mentions: [auteurMessage]
+                        }, { quoted: ms });
+                    }
+
+                } else {
+                    await zk.sendMessage(origineMessage, {
+                        text: `🛡️ *ANTI-MENTION | RAHMANI MD*\n@${auteurMessage.split('@')[0]} mass tagging is not allowed!`,
+                        mentions: [auteurMessage]
+                    }, { quoted: ms });
+                }
+            }
+        }
+    } catch (e) {
+        console.log("antimention error: " + e);
+    }
+    // ============= END ANTI-MENTION HANDLER =============
 
         /** *************************anti-bot******************************************** */
     try {
