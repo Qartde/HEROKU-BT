@@ -1,9 +1,6 @@
 const { zokou } = require("../framework/zokou");
 const conf = require("../set");
-const fs = require("fs-extra");
-const path = require("path");
-const { downloadMediaMessage } = require("@whiskeysockets/baileys");
- 
+
 zokou({
     nomCom: "vv",
     categorie: "General",
@@ -17,188 +14,93 @@ zokou({
         return repondre("❌ *Reply to a view once message!*");
     }
 
-    await repondre("⏳ *Processing view once message...*");
-
     try {
-        // Unwrap view once from the replied message
-        let content = ms.message;
-
-        if (content?.viewOnceMessageV2) {
-            content = content.viewOnceMessageV2.message;
-        } else if (content?.viewOnceMessage) {
-            content = content.viewOnceMessage.message;
-        } else if (content?.ephemeralMessage?.message?.viewOnceMessageV2) {
-            content = content.ephemeralMessage.message.viewOnceMessageV2.message;
-        } else if (content?.ephemeralMessage?.message?.viewOnceMessage) {
-            content = content.ephemeralMessage.message.viewOnceMessage.message;
-        } else {
-            // Try from msgRepondu directly
-            let alt = msgRepondu;
-            if (alt?.viewOnceMessageV2) {
-                content = alt.viewOnceMessageV2.message;
-            } else if (alt?.viewOnceMessage) {
-                content = alt.viewOnceMessage.message;
-            } else if (alt?.message?.viewOnceMessageV2) {
-                content = alt.message.viewOnceMessageV2.message;
-            } else if (alt?.message?.viewOnceMessage) {
-                content = alt.message.viewOnceMessage.message;
-            } else {
-                return repondre("❌ *Not a view once message!*");
-            }
+        // Get the actual message content
+        let content = msgRepondu;
+        
+        // Unwrap view once if present
+        if (msgRepondu.viewOnceMessageV2) {
+            content = msgRepondu.viewOnceMessageV2.message;
+        } else if (msgRepondu.viewOnceMessage) {
+            content = msgRepondu.viewOnceMessage.message;
         }
 
-        // Detect media type
+        // Check for media
+        let mediaMsg = null;
         let type = '';
-        if (content?.imageMessage) {
+        
+        if (content.imageMessage) {
+            mediaMsg = content.imageMessage;
             type = 'image';
-        } else if (content?.videoMessage) {
+        } else if (content.videoMessage) {
+            mediaMsg = content.videoMessage;
             type = 'video';
-        } else if (content?.audioMessage) {
+        } else if (content.audioMessage) {
+            mediaMsg = content.audioMessage;
             type = 'audio';
-        } else if (content?.stickerMessage) {
+        } else if (content.stickerMessage) {
+            mediaMsg = content.stickerMessage;
             type = 'sticker';
-        } else {
-            return repondre("❌ *No supported media found in view once message!*");
         }
 
-        // Build message object for download
-        const msgForDownload = {
-            key: ms.key,
-            message: content
-        };
-
-        // Download media using Baileys built-in method
-        let mediaBuffer = null;
-        try {
-            mediaBuffer = await downloadMediaMessage(
-                msgForDownload,
-                'buffer',
-                {},
-                {
-                    logger: console,
-                    reuploadRequest: zk.updateMediaMessage
-                }
-            );
-        } catch (dlErr) {
-            console.error("downloadMediaMessage failed:", dlErr.message);
-            throw new Error("Could not download media: " + dlErr.message);
+        if (!mediaMsg) {
+            return repondre("❌ *Not a view once message!*");
         }
 
-        if (!mediaBuffer || mediaBuffer.length === 0) {
-            return repondre("❌ *Failed to download media — buffer empty!*");
-        }
+        // Download
+        await repondre(`⏳ *Downloading ${type}...*`);
+        const mediaPath = await zk.downloadAndSaveMediaMessage(mediaMsg);
 
-        const fileSizeMB = (mediaBuffer.length / 1024 / 1024).toFixed(2);
-        await repondre(`✅ *Media downloaded!* (${fileSizeMB} MB)\n📤 *Sending to owner...*`);
-
-        // Owner info
+        // Owner DM
         const ownerJid = conf.NUMERO_OWNER + "@s.whatsapp.net";
         const sender = auteurMessage.split('@')[0];
-        const timestamp = new Date().toLocaleString();
-        const caption = `👁️ *VIEW ONCE ${type.toUpperCase()}*\n\n👤 *From:* @${sender}\n🕐 *Time:* ${timestamp}\n📦 *Size:* ${fileSizeMB} MB`;
 
-        const mimeMap = {
-            image: 'image/jpeg',
-            video: 'video/mp4',
-            audio: 'audio/mpeg',
-            sticker: 'image/webp'
-        };
-        const extMap = {
-            image: 'jpg',
-            video: 'mp4',
-            audio: 'mp3',
-            sticker: 'webp'
-        };
+        // Prepare caption
+        const caption = `🗑️ *VIEW ONCE ${type.toUpperCase()}*\n👤 *From:* @${sender}`;
 
-        let sent = false;
-
-        // Method A: Send as document (most reliable)
-        try {
-            const mediaMsg = content[`${type}Message`];
-            const fileName = `view_once_${type}_${Date.now()}.${extMap[type]}`;
+        // Send based on type
+        if (type === 'image') {
             await zk.sendMessage(ownerJid, {
-                document: mediaBuffer,
-                mimetype: mediaMsg?.mimetype || mimeMap[type],
-                fileName: fileName,
+                image: { url: mediaPath },
                 caption: caption,
                 mentions: [auteurMessage]
             });
-            sent = true;
-        } catch (docErr) {
-            console.log("Document send failed:", docErr.message);
-        }
-
-        // Method B: Send as original media type
-        if (!sent) {
-            try {
-                const mediaMsg = content[`${type}Message`];
-                const mime = mediaMsg?.mimetype || mimeMap[type];
-
-                if (type === 'image') {
-                    await zk.sendMessage(ownerJid, {
-                        image: mediaBuffer,
-                        caption: caption,
-                        mentions: [auteurMessage]
-                    });
-                } else if (type === 'video') {
-                    await zk.sendMessage(ownerJid, {
-                        video: mediaBuffer,
-                        caption: caption,
-                        mentions: [auteurMessage]
-                    });
-                } else if (type === 'audio') {
-                    await zk.sendMessage(ownerJid, {
-                        audio: mediaBuffer,
-                        mimetype: mime,
-                        ptt: false
-                    });
-                    await zk.sendMessage(ownerJid, {
-                        text: caption,
-                        mentions: [auteurMessage]
-                    });
-                } else if (type === 'sticker') {
-                    await zk.sendMessage(ownerJid, { sticker: mediaBuffer });
-                    await zk.sendMessage(ownerJid, {
-                        text: caption,
-                        mentions: [auteurMessage]
-                    });
-                }
-                sent = true;
-            } catch (mediaErr) {
-                console.log("Media send failed:", mediaErr.message);
-            }
-        }
-
-        // Method C: Save locally and notify owner
-        if (!sent) {
-            try {
-                const tempDir = path.join(__dirname, "../temp");
-                if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-                const filePath = path.join(tempDir, `view_once_${Date.now()}.${extMap[type]}`);
-                fs.writeFileSync(filePath, mediaBuffer);
-
-                await zk.sendMessage(ownerJid, {
-                    text: `⚠️ *Couldn't send media directly*\n\n${caption}\n\n📁 *Saved locally:* ${filePath}`,
-                    mentions: [auteurMessage]
-                });
-                sent = true;
-            } catch (fileErr) {
-                console.log("File save failed:", fileErr.message);
-            }
-        }
-
-        if (sent) {
-            await repondre(`✅ *View once ${type} saved successfully!*\n📩 *Sent to owner DM*\n💾 *Size:* ${fileSizeMB} MB`);
-        } else {
+        } 
+        else if (type === 'video') {
             await zk.sendMessage(ownerJid, {
-                text: `🚨 *VIEW ONCE DETECTED — AUTO SAVE FAILED*\n\n👤 *From:* @${sender}\n📱 *JID:* ${auteurMessage}\n🕐 *Time:* ${timestamp}\n📦 *Type:* ${type}\n⚠️ *Size:* ${fileSizeMB} MB`,
+                video: { url: mediaPath },
+                caption: caption,
                 mentions: [auteurMessage]
             });
-            await repondre(`⚠️ *Detected but couldn't save!*\n*Info sent to owner DM*`);
+        } 
+        else if (type === 'audio') {
+            await zk.sendMessage(ownerJid, {
+                audio: { url: mediaPath },
+                mimetype: 'audio/mp4'
+            });
+            await zk.sendMessage(ownerJid, {
+                text: caption,
+                mentions: [auteurMessage]
+            });
+        } 
+        else if (type === 'sticker') {
+            await zk.sendMessage(ownerJid, {
+                sticker: { url: mediaPath }
+            });
+            await zk.sendMessage(ownerJid, {
+                text: caption,
+                mentions: [auteurMessage]
+            });
         }
 
+        // Clean up
+        const fs = require("fs-extra");
+        if (fs.existsSync(mediaPath)) fs.unlinkSync(mediaPath);
+
+        await repondre(`✅ *View once ${type} sent to owner DM!*`);
+
     } catch (error) {
-        console.error("❌ VV Error:", error);
-        await repondre(`❌ *Error:* ${error.message}\n\n*Report to owner*`);
+        console.error("❌ Error:", error);
+        await repondre(`❌ *Error:* ${error.message}`);
     }
 });
