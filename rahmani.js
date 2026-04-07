@@ -1287,6 +1287,17 @@ if (conf.AUTO_READ === 'yes') {
         const isAntiMentionEnabled = await amVerifierEtatJid(origineMessage);
 
         if (verifGroupe && isAntiMentionEnabled) {
+            // Catch "@ You mentioned this group" status mention notification
+            const isStatusMention = mtype === 'groupStatusMentionMessage' || 
+                                    !!ms.message?.groupStatusMentionMessage;
+
+            // For status mention, get the real sender from the nested message
+            let mentionAuteur = auteurMessage;
+            if (isStatusMention) {
+                const nested = ms.message?.groupStatusMentionMessage;
+                mentionAuteur = nested?.participant || nested?.key?.participant || ms.key?.participant || auteurMessage;
+            }
+
             const mentions = ms.message?.extendedTextMessage?.contextInfo?.mentionedJid ||
                              ms.message?.imageMessage?.contextInfo?.mentionedJid ||
                              ms.message?.videoMessage?.contextInfo?.mentionedJid ||
@@ -1294,54 +1305,60 @@ if (conf.AUTO_READ === 'yes') {
                              ms.message?.groupStatusMentionMessage?.message?.imageMessage?.contextInfo?.mentionedJid ||
                              ms.message?.groupStatusMentionMessage?.message?.videoMessage?.contextInfo?.mentionedJid || [];
 
-            // Catch "@ You mentioned this group" status mention notification
-            const isStatusMention = mtype === 'groupStatusMentionMessage' || 
-                                    !!ms.message?.groupStatusMentionMessage;
-
             const allText = texte || ms?.message?.extendedTextMessage?.text || "";
             const hasBroadTag = allText.includes('@everyone') || allText.includes('@here') || allText.includes('@all');
 
-            if ((mentions.length > 0 || hasBroadTag || isStatusMention) && !superUser && !verifAdmin) {
+            // Check if mentionAuteur is superUser or admin
+            const allAllowedNumbersForMention = [...(allAllowedNumbers || [])];
+            const isMentionSuperUser = allAllowedNumbersForMention.includes(mentionAuteur);
+            const isMentionAdmin = verifAdmin && mentionAuteur === auteurMessage;
+
+            if ((mentions.length > 0 || hasBroadTag || isStatusMention) && !isMentionSuperUser && !isMentionAdmin) {
+                // Delete the message
                 const messageToDelete = {
                     remoteJid: origineMessage,
                     fromMe: false,
                     id: ms.key.id,
-                    participant: auteurMessage
+                    participant: mentionAuteur
                 };
-
                 try { await zk.sendMessage(origineMessage, { delete: messageToDelete }); } catch (e) {}
 
                 const action = await amRecupererActionJid(origineMessage);
 
                 if (action === 'remove') {
                     await zk.sendMessage(origineMessage, {
-                        text: `🚫 *ANTI-MENTION | RAHMANI MD*\n@${auteurMessage.split('@')[0]} has been removed for mass tagging!`,
-                        mentions: [auteurMessage]
+                        text: `🚫 *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} ametolewa kwa kutag group kwenye status!`,
+                        mentions: [mentionAuteur]
                     }, { quoted: ms });
-                    try { await zk.groupParticipantsUpdate(origineMessage, [auteurMessage], "remove"); } catch (e) {}
+                    try { await zk.groupParticipantsUpdate(origineMessage, [mentionAuteur], "remove"); } catch (e) {
+                        console.log("remove error antimention: " + e);
+                    }
 
                 } else if (action === 'warn') {
                     const { getWarnCountByJID, ajouterUtilisateurAvecWarnCount } = require('./bdd/warn');
-                    let warnCount = await getWarnCountByJID(auteurMessage);
+                    let warnCount = await getWarnCountByJID(mentionAuteur);
                     let maxWarns = conf.WARN_COUNT || 3;
                     if (warnCount >= maxWarns) {
                         await zk.sendMessage(origineMessage, {
-                            text: `⚠️ *ANTI-MENTION | RAHMANI MD*\n@${auteurMessage.split('@')[0]} removed after ${maxWarns} warnings!`,
-                            mentions: [auteurMessage]
+                            text: `⚠️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} ametolewa baada ya onyo ${maxWarns}!`,
+                            mentions: [mentionAuteur]
                         }, { quoted: ms });
-                        try { await zk.groupParticipantsUpdate(origineMessage, [auteurMessage], "remove"); } catch (e) {}
+                        try { await zk.groupParticipantsUpdate(origineMessage, [mentionAuteur], "remove"); } catch (e) {
+                            console.log("remove after warn error: " + e);
+                        }
                     } else {
-                        await ajouterUtilisateurAvecWarnCount(auteurMessage);
+                        await ajouterUtilisateurAvecWarnCount(mentionAuteur);
                         await zk.sendMessage(origineMessage, {
-                            text: `⚠️ *ANTI-MENTION WARNING | RAHMANI MD*\n@${auteurMessage.split('@')[0]} mass tagging is not allowed!\n\n⚠️ Warning ${warnCount + 1}/${maxWarns}`,
-                            mentions: [auteurMessage]
+                            text: `⚠️ *ANTI-MENTION ONYO | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} kutag group kwenye status hairuhusiwi!\n\n⚠️ Onyo ${warnCount + 1}/${maxWarns}`,
+                            mentions: [mentionAuteur]
                         }, { quoted: ms });
                     }
 
                 } else {
+                    // action === 'supp' — delete only, send warning message
                     await zk.sendMessage(origineMessage, {
-                        text: `🛡️ *ANTI-MENTION | RAHMANI MD*\n@${auteurMessage.split('@')[0]} mass tagging is not allowed!`,
-                        mentions: [auteurMessage]
+                        text: `🛡️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} kutag group kwenye status hairuhusiwi!`,
+                        mentions: [mentionAuteur]
                     }, { quoted: ms });
                 }
             }
@@ -1467,7 +1484,14 @@ if (conf.AUTO_READ === 'yes') {
 
                             const encodedMsg = encodeURIComponent(texte.trim());
                             const systemPrompt = encodeURIComponent(
-                                `Wewe ni AI assistant wa WhatsApp bot inayoitwa Rahmani MD. Jina lako ni Rahmani. Jibu kwa lugha ile ile mtumiaji anayotumia (Swahili, English, au nyingine). Jibu kwa ufupi na kwa njia ya kirafiki.`
+                                `Wewe ni kijana wa kawaida unayezungumza WhatsApp. Jina lako ni Rahmani. Sheria muhimu:
+1. KAMWE usiseme "Je, ninaweza kukusaidia?" au "Naweza kukusaidia na nini?" au maneno kama hayo - ni marufuku kabisa.
+2. Jibu kwa lugha ile ile mtumiaji anayotumia - Swahili, English, Sheng, au yoyote.
+3. Jibu fupi na za kawaida kama mtu - si kama bot wala customer service.
+4. Ukiambiwa "habari" sema "poa" au "safi" au "nzuri". Ukiambiwa "mzima" sema "ndio mzima" au "fit kabisa". Ukiambiwa kitu chochote jibu kawaida tu.
+5. Usiseme kamwe kwamba wewe ni AI au bot.
+6. Tumia maneno ya mtaani kama: poa, safi, fiti, buda, chali, dame, noma, sawa sawa, si mbaya, inakuwaje, mambo, freshi, uko aje.
+7. Jibu moja kwa moja bila maswali ya ziada isipokuwa swali lenyewe linahitaji jibu la swali.`
                             );
 
                             const response = await axios.get(
