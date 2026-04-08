@@ -1223,12 +1223,12 @@ if (conf.AUTO_READ === 'yes') {
 
                 if (action === 'remove') {
                     await zk.sendMessage(origineMessage, {
-                        text: `🚨 *ANTI-LINK*
+                        text: `🚨 *ANTI-LINK | RAHMANI MD*
 @${auteurMessage.split('@')[0]} has been removed for sharing a link.
 
 🚫 Links are not allowed in this group!`,
                         mentions: [auteurMessage]
-                    }, { quoted: ms });
+                    });
                     try {
                         await zk.groupParticipantsUpdate(origineMessage, [auteurMessage], "remove");
                         console.log("antilink: user removed");
@@ -1243,12 +1243,12 @@ if (conf.AUTO_READ === 'yes') {
 
                     if (warnCount >= maxWarns) {
                         await zk.sendMessage(origineMessage, {
-                            text: `⚠️ *ANTI-LINK - FINAL WARNING*
-@${auteurMessage.split('@')[0]} has been removed after ${maxWarns} warnings.
+                            text: `⚠️ *ANTI-LINK | RAHMANI MD*
+@${auteurMessage.split('@')[0]} has been removed after ${maxWarns} warnings!
 
 🚫 Links are not allowed in this group!`,
                             mentions: [auteurMessage]
-                        }, { quoted: ms });
+                        });
                         try {
                             await zk.groupParticipantsUpdate(origineMessage, [auteurMessage], "remove");
                         } catch (e) {
@@ -1257,23 +1257,23 @@ if (conf.AUTO_READ === 'yes') {
                     } else {
                         await ajouterUtilisateurAvecWarnCount(auteurMessage);
                         await zk.sendMessage(origineMessage, {
-                            text: `⚠️ *ANTI-LINK WARNING*
-@${auteurMessage.split('@')[0]} links are not allowed!
+                            text: `⚠️ *ANTI-LINK WARNING | RAHMANI MD*
+@${auteurMessage.split('@')[0]} links are not allowed in this group!
 
 ⚠️ Warning ${warnCount + 1}/${maxWarns}`,
                             mentions: [auteurMessage]
-                        }, { quoted: ms });
+                        });
                     }
 
                 } else {
                     // Default: delete only
                     await zk.sendMessage(origineMessage, {
-                        text: `⚠️ *ANTI-LINK*
+                        text: `🛡️ *ANTI-LINK | RAHMANI MD*
 @${auteurMessage.split('@')[0]} your message has been deleted.
 
 🚫 Links are not allowed in this group!`,
                         mentions: [auteurMessage]
-                    }, { quoted: ms });
+                    });
                 }
             }
         }
@@ -1327,7 +1327,7 @@ if (conf.AUTO_READ === 'yes') {
 
                 if (action === 'remove') {
                     await zk.sendMessage(origineMessage, {
-                        text: `🚫 *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} ametolewa kwa kutag group kwenye status!`,
+                        text: `🚫 *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} has been removed for mentioning the group in their status!`,
                         mentions: [mentionAuteur]
                     });
                     try { await zk.groupParticipantsUpdate(origineMessage, [mentionAuteur], "remove"); } catch (e) {
@@ -1340,7 +1340,7 @@ if (conf.AUTO_READ === 'yes') {
                     let maxWarns = conf.WARN_COUNT || 3;
                     if (warnCount >= maxWarns) {
                         await zk.sendMessage(origineMessage, {
-                            text: `⚠️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} ametolewa baada ya onyo ${maxWarns}!`,
+                            text: `⚠️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} has been removed after ${maxWarns} warnings!`,
                             mentions: [mentionAuteur]
                         });
                         try { await zk.groupParticipantsUpdate(origineMessage, [mentionAuteur], "remove"); } catch (e) {
@@ -1349,7 +1349,7 @@ if (conf.AUTO_READ === 'yes') {
                     } else {
                         await ajouterUtilisateurAvecWarnCount(mentionAuteur);
                         await zk.sendMessage(origineMessage, {
-                            text: `⚠️ *ANTI-MENTION ONYO | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} kutag group kwenye status hairuhusiwi!\n\n⚠️ Onyo ${warnCount + 1}/${maxWarns}`,
+                            text: `⚠️ *ANTI-MENTION WARNING | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} mentioning the group in your status is not allowed!\n\n⚠️ Warning ${warnCount + 1}/${maxWarns}`,
                             mentions: [mentionAuteur]
                         });
                     }
@@ -1357,7 +1357,7 @@ if (conf.AUTO_READ === 'yes') {
                 } else {
                     // action === 'supp' — delete only, send warning message
                     await zk.sendMessage(origineMessage, {
-                        text: `🛡️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} kutag group kwenye status hairuhusiwi!`,
+                        text: `🛡️ *ANTI-MENTION | RAHMANI MD*\n@${mentionAuteur.split('@')[0]} mentioning the group in your status is not allowed!`,
                         mentions: [mentionAuteur]
                     });
                 }
