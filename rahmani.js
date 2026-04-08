@@ -1752,8 +1752,7 @@ zk.ev.on('group-participants.update', async (group) => {
         const antiDeleteStore = new Map();
         zk.ev.on("messages.upsert", async (m) => {
             try {
-                const { messages, type } = m;
-                if (type !== 'notify') return;
+                const { messages } = m;
 
                 for (const ms of messages) {
                     if (!ms.message) continue;
