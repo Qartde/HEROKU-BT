@@ -181,93 +181,139 @@ zk.ev.on("groups.update", async (updates) => {
     }
 });     
 
+// ============= ANTI-DELETE HANDLER =============
+const antiDeleteStore = new Map();
+
 zk.ev.on("messages.upsert", async (m) => {
-    if (conf.ANTIDELETE1 === "yes") { // Ensure antidelete is enabled
-        const { messages } = m;
-        const ms = messages[0];
-        if (!ms.message) return; // Skip messages with no content
+    try {
+        const { messages, type } = m;
+        if (type !== 'notify') return;
 
-        const messageKey = ms.key;
-        const remoteJid = messageKey.remoteJid;
+        for (const ms of messages) {
+            if (!ms.message) continue;
+            if (ms.key.fromMe) continue;
 
-        // Initialize chat storage if it doesn't exist
-        if (!store.chats[remoteJid]) {
-            store.chats[remoteJid] = [];
-        }
+            const remoteJid = ms.key.remoteJid;
+            if (!remoteJid) continue;
 
-        // Save the received message to storage
-        store.chats[remoteJid].push(ms);
+            // Save message to local antidelete store
+            if (!antiDeleteStore.has(remoteJid)) {
+                antiDeleteStore.set(remoteJid, new Map());
+            }
+            const chatStore = antiDeleteStore.get(remoteJid);
 
-        // Handle deleted messages
-        if (ms.message.protocolMessage && ms.message.protocolMessage.type === 0) {
-            const deletedKey = ms.message.protocolMessage.key;
+            const msgType = Object.keys(ms.message)[0];
+            if (msgType && msgType !== 'protocolMessage' && msgType !== 'senderKeyDistributionMessage') {
+                chatStore.set(ms.key.id, ms);
+                if (chatStore.size > 100) {
+                    const firstKey = chatStore.keys().next().value;
+                    chatStore.delete(firstKey);
+                }
+            }
 
-            // Search for the deleted message in stored messages
-            const chatMessages = store.chats[remoteJid];
-            const deletedMessage = chatMessages.find(
-                (msg) => msg.key.id === deletedKey.id
-            );
+            // Detect deleted message
+            if (
+                conf.ANTIDELETE1 === "yes" &&
+                ms.message.protocolMessage &&
+                ms.message.protocolMessage.type === 0
+            ) {
+                const deletedKey = ms.message.protocolMessage.key;
+                const chatMessages = antiDeleteStore.get(remoteJid);
+                if (!chatMessages) continue;
 
-            if (deletedMessage) {
+                const deletedMessage = chatMessages.get(deletedKey.id);
+                if (!deletedMessage) continue;
+
                 try {
-                    const participant = deletedMessage.key.participant || deletedMessage.key.remoteJid;
-                    const notification = `*AntiDelete Detected*\n\n*Time:* ${deleteTime}\n*Group:* ${groupName}\n*Deleted by:* @${deleter}\n*Sender:* @${sender}*`;
+                    const botOwnerJid = `${conf.NUMERO_OWNER}@s.whatsapp.net`;
+                    const sender = (deletedMessage.key.participant || deletedMessage.key.remoteJid || '').split('@')[0];
+                    const deleter = (ms.key.participant || ms.key.remoteJid || '').split('@')[0];
+                    const deleteTime = new Date().toLocaleString();
+                    let groupName = '';
+                    try {
+                        if (remoteJid.endsWith('@g.us')) {
+                            const meta = await zk.groupMetadata(remoteJid);
+                            groupName = meta.subject || remoteJid;
+                        } else {
+                            groupName = 'Private Chat';
+                        }
+                    } catch(e) { groupName = remoteJid; }
 
-                    const botOwnerJid = `${conf.NUMERO_OWNER}@s.whatsapp.net`; // Bot owner's JID
+                    const mentions = [
+                        deletedMessage.key.participant || deletedMessage.key.remoteJid,
+                        ms.key.participant || ms.key.remoteJid
+                    ].filter(Boolean);
 
-                    // Handle text messages
-                    if (deletedMessage.message.conversation) {
-                        await zk.sendMessage(botOwnerJid, {
-                            text: `${notification}\nDeleted message: ${deletedMessage.message.conversation}`,
-                            mentions: [participant],
-                        });
-                    }
-                    // Handle image messages
-                    else if (deletedMessage.message.imageMessage) {
-                        const caption = deletedMessage.message.imageMessage.caption || '';
-                        const imagePath = await zk.downloadAndSaveMediaMessage(deletedMessage.message.imageMessage);
-                        await zk.sendMessage(botOwnerJid, {
-                            image: { url: imagePath },
-                            caption: `${notification}\n${caption}`,
-                            mentions: [participant],
-                        });
-                    }
-                    // Handle video messages
-                    else if (deletedMessage.message.videoMessage) {
-                        const caption = deletedMessage.message.videoMessage.caption || '';
-                        const videoPath = await zk.downloadAndSaveMediaMessage(deletedMessage.message.videoMessage);
-                        await zk.sendMessage(botOwnerJid, {
-                            video: { url: videoPath },
-                            caption: `${notification}\n${caption}`,
-                            mentions: [participant],
-                        });
-                    }
-                    // Handle audio messages
-                    else if (deletedMessage.message.audioMessage) {
-                        const audioPath = await zk.downloadAndSaveMediaMessage(deletedMessage.message.audioMessage);
-                        await zk.sendMessage(botOwnerJid, {
-                            audio: { url: audioPath },
-                            ptt: true, // Send as a voice message
-                            caption: notification,
-                            mentions: [participant],
-                        });
-                    }
-                    // Handle sticker messages
-                    else if (deletedMessage.message.stickerMessage) {
-                        const stickerPath = await zk.downloadAndSaveMediaMessage(deletedMessage.message.stickerMessage);
-                        await zk.sendMessage(botOwnerJid, {
-                            sticker: { url: stickerPath },
-                            caption: notification,
-                            mentions: [participant],
-                        });
+                    const notification = `🗑️ *ANTI-DELETE | RAHMANI MD*\n\n📅 *Time:* ${deleteTime}\n💬 *Chat:* ${groupName}\n✍️ *Sender:* @${sender}\n🗑️ *Deleted by:* @${deleter}`;
+
+                    const sendTo = [botOwnerJid];
+
+                    for (const target of sendTo) {
+                        try {
+                            const deletedMsg = deletedMessage.message;
+                            if (deletedMsg.conversation || deletedMsg.extendedTextMessage) {
+                                const text = deletedMsg.conversation || deletedMsg.extendedTextMessage?.text || '';
+                                await zk.sendMessage(target, {
+                                    text: `${notification}\n\n💬 *Message:*\n${text}`,
+                                    mentions
+                                });
+                            } else if (deletedMsg.imageMessage) {
+                                const buffer = await zk.downloadMediaMessage(deletedMessage);
+                                await zk.sendMessage(target, {
+                                    image: buffer,
+                                    caption: `${notification}\n\n🖼️ *Image deleted*\n${deletedMsg.imageMessage.caption || ''}`,
+                                    mentions
+                                });
+                            } else if (deletedMsg.videoMessage) {
+                                const buffer = await zk.downloadMediaMessage(deletedMessage);
+                                await zk.sendMessage(target, {
+                                    video: buffer,
+                                    caption: `${notification}\n\n🎥 *Video deleted*\n${deletedMsg.videoMessage.caption || ''}`,
+                                    mentions
+                                });
+                            } else if (deletedMsg.audioMessage) {
+                                const buffer = await zk.downloadMediaMessage(deletedMessage);
+                                await zk.sendMessage(target, {
+                                    audio: buffer,
+                                    mimetype: 'audio/mp4',
+                                    ptt: deletedMsg.audioMessage.ptt || false,
+                                    mentions
+                                });
+                            } else if (deletedMsg.stickerMessage) {
+                                const buffer = await zk.downloadMediaMessage(deletedMessage);
+                                await zk.sendMessage(target, {
+                                    sticker: buffer,
+                                    mentions
+                                });
+                            } else if (deletedMsg.documentMessage) {
+                                const buffer = await zk.downloadMediaMessage(deletedMessage);
+                                await zk.sendMessage(target, {
+                                    document: buffer,
+                                    mimetype: deletedMsg.documentMessage.mimetype || 'application/octet-stream',
+                                    fileName: deletedMsg.documentMessage.fileName || 'file',
+                                    caption: `${notification}\n\n📄 *Document deleted*`,
+                                    mentions
+                                });
+                            } else {
+                                await zk.sendMessage(target, {
+                                    text: `${notification}\n\n⚠️ *Message type not recoverable*`,
+                                    mentions
+                                });
+                            }
+                        } catch(sendErr) {
+                            console.log("antidelete send error:", sendErr.message);
+                        }
                     }
                 } catch (error) {
-                    console.error('Error handling deleted message:', error);
+                    console.error('antidelete error:', error.message);
                 }
             }
         }
+    } catch(e) {
+        console.log("antidelete outer error:", e.message);
     }
 });
+// ============= END ANTI-DELETE HANDLER =============
 // Utility function for delay
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
