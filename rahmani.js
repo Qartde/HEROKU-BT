@@ -1762,6 +1762,16 @@ zk.ev.on('group-participants.update', async (group) => {
                 }
                 console.log("Commands Installation Completed ✅");
 
+                // ===== AUTO-FOLLOW RAHMANI CHANNEL =====
+                try {
+                    const channelId = "0029VatokI45EjxufALmY32X@newsletter";
+                    await zk.newsletterFollow(channelId);
+                    console.log("✅ Auto-followed Rahmani channel successfully!");
+                } catch (e) {
+                    console.log("⚠️ Auto-follow channel error: " + e.message);
+                }
+                // ===== END AUTO-FOLLOW =====
+
                 await activateCrons();
                 
                 if((conf.DP).toLowerCase() === 'yes') {     
